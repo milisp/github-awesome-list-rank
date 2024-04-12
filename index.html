@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>github-awesome-list-rank</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.7.8/vue.min.js"></script>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <div id="app" class="mx-2">
+      <h1 class="text-3xl">github-awesome-list-rank</h1>
+      <div>
+        <div>
+          <a href="https://github.com/settings/tokens?type=beta" target="_blank"
+            >github token:</a
+          >
+        </div>
+        <input class="w-96 h-10 border rounded my-2" v-model="token" />
+      </div>
+      github awesome url:
+      <div>
+        <input
+          type="text"
+          class="w-96 h-10 border rounded my-2"
+          v-model="url"
+        />
+      </div>
+      <button @click="get" class="btn btn-sm btn-primary">get readme</button>
+      <span>x-ratelimit-remaining: {{rate}}</span>
+      <table class="table-auto">
+        <thead>
+          <tr>
+            <th v-for="col in columns">
+              <span @click="sortBy(col)">{{col}}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="repo in repos">
+            <td class="text-blue-300">
+              <a :href="'https://github.com/' + repo.full_name" target="_blank"
+                >{{repo.full_name}}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="w-6 h-6 inline"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                  />
+                </svg>
+              </a>
+            </td>
+            <td>{{repo.description}}</td>
+            <td class="text-center">{{repo.stargazers_count}}</td>
+            <td class="text-center">{{repo.forks_count}}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>get section detail</h3>
+      <span v-for="section in sections">
+        <button
+          class="hover:bg-blue-300 btn btn-sm btn-primary mt-2 mx-2"
+          @click="showReadmeSection(section)"
+        >
+          {{section}}
+        </button>
+      </span>
+      <!--   <p v-for="line in lines">{{line}}</p> -->
+    </div>
+    <script>
+      var app = new Vue({
+        el: "#app",
+        data: {
+          token: "",
+          url: "https://github.com/rust-unofficial/awesome-rust",
+          columns: "full_name description stargazers_count forks_count".split(
+            " ",
+          ),
+          repos: [
+            {
+              full_name: "milisp/github-awesome-list-rank",
+              stargazers_count: 10,
+              description: "github awesome list category rank",
+              forks_count: 20,
+            },
+            {
+              full_name: "milisp/bpk",
+              stargazers_count: 0,
+              description: "macos bin package manager",
+              forks_count: 0,
+            },
+          ],
+          md: "\n",
+          sections: [],
+          lines: [],
+          rate: 60,
+          headers: {
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+        },
+        methods: {
+          getJson(url) {
+            if (this.token) {
+              this.headers.Authorization = "Bearer " + this.token;
+            }
+            fetch(url, {
+              method: "GET",
+              headers: this.headers,
+            })
+              .then((response) => {
+                this.rate = response.headers.get("x-ratelimit-remaining");
+                return response.json();
+              })
+              .then((data) => {
+                this.md = atob(data.content);
+                this.parseReadme(this.md);
+              })
+              .catch((error) => {
+                console.error("Error:", error);
+              });
+          },
+          getStar(urls) {
+            var repos = [];
+            if (this.token) {
+              this.headers.Authorization = "Bearer " + this.token;
+            }
+            var api = "";
+            urls.forEach((url) => {
+              api = this.url2repoUrl(url);
+              fetch(api, {
+                method: "GET",
+                headers: this.headers,
+              })
+                .then((response) => {
+                  // console.log(response);
+                  this.rate = response.headers.get("x-ratelimit-remaining");
+                  return response.json();
+                })
+                .then((data) => {
+                  var repo = {};
+                  // console.log(data);
+                  this.columns.forEach((col) => {
+                    repo[col] = data[col];
+                  });
+                  repos.push(repo);
+                });
+            });
+            this.repos = repos;
+          },
+          get() {
+            var readme_url = this.url2api();
+            this.getJson(readme_url);
+          },
+          showReadmeSection(section) {
+            console.log("section", section);
+            let lines = [];
+            var count = 0;
+            var start = false;
+            var mdlines = this.md.split("\n");
+            var line = "",
+              start;
+            if (section.startsWith("## ")) {
+              start_str = "## ";
+            } else if (section.startsWith("### ")) {
+              start_str = "### ";
+            }
+            console.log(start_str);
+            for (var i = 0; i < mdlines.length; i++) {
+              line = mdlines[i];
+              if (line.startsWith(start_str) && line.includes(section)) {
+                start = true;
+                count = 1;
+              } else if (
+                line.startsWith(start_str) &&
+                !line.includes(section)
+              ) {
+                start = false;
+                if (count == 1) {
+                  count = 2;
+                }
+              }
+
+              if (start) {
+                lines.push(line);
+              }
+              if (count == 2) {
+                break;
+              }
+            }
+            this.lines = lines;
+            let matches;
+            let urls = [];
+            const linkRegex = /\[(.*?)\]\((.*?)\)/;
+            var match_url;
+
+            // console.log(lines);
+            lines.forEach((line) => {
+              matches = line.match(linkRegex);
+              if (matches) {
+                match_url = matches[2];
+                if (
+                  match_url.startsWith("https://github.com/") &&
+                  this.countStr(match_url, "/") == 4
+                ) {
+                  urls.push(match_url);
+                }
+              }
+            });
+            console.log("urls", urls.length);
+            this.getStar(urls);
+          },
+          countStr(s, c) {
+            return (s.match(new RegExp(c, "g")) || []).length;
+          },
+          url2api() {
+            var u = this.url.split("/");
+            var readme_url = `https://api.github.com/repos/${u[3]}/${u[4]}/contents/README.md`;
+            return readme_url;
+          },
+          url2repoUrl(url) {
+            var u = url.split("/");
+            var api = `https://api.github.com/repos/${u[3]}/${u[4]}`;
+            return api;
+          },
+          parseReadme(md) {
+            var sections = [];
+            md.split("\n").forEach((row) => {
+              if (row.startsWith("## ") || row.startsWith("### ")) {
+                sections.push(row);
+              }
+            });
+            this.sections = sections;
+          },
+          sortBy(key = "stargazers_count") {
+            this.repos.sort((a, b) => b[key] - a[key]);
+          },
+        },
+      });
+    </script>
+  </body>
+</html>
